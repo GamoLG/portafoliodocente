@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir Archivos - Portafolio de Cursos</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <img src="https://www.unsaac.edu.pe/images/logo/logo_unsaac.png" alt="UNSAAC">
+            <h1>Portafolio de Cursos</h1>
+        </div>
+        <nav id="nav-menu"></nav>
+        <div id="user-info"></div>
+    </header>
+
+    <main>
+        <section class="file-upload">
+            <h2>Subir Archivos al Portafolio</h2>
+            
+            <div class="upload-container">
+                <form id="upload-form">
+                    <div class="form-group">
+                        <label for="course-select">Seleccionar Curso:</label>
+                        <select id="course-select" required>
+                            <option value="">-- Seleccione un curso --</option>
+                            <!-- Se llenará dinámicamente -->
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="portfolio-select">Seleccionar Portafolio:</label>
+                        <select id="portfolio-select" required disabled>
+                            <option value="">-- Seleccione un portafolio --</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="file-category">Categoría:</label>
+                        <select id="file-category" required>
+                            <option value="">-- Seleccione categoría --</option>
+                            <option value="silabo">Sílabo</option>
+                            <option value="material">Material de Enseñanza</option>
+                            <option value="examenes">Exámenes</option>
+                            <option value="trabajos">Trabajos Estudiantiles</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="file-subcategory">Subcategoría (opcional):</label>
+                        <input type="text" id="file-subcategory" placeholder="Ej: Diapositivas, Guía 1, etc.">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="quality-level">Nivel de Calidad (para trabajos estudiantiles):</label>
+                        <select id="quality-level">
+                            <option value="">-- Seleccione nivel --</option>
+                            <option value="excelente">Excelente</option>
+                            <option value="bueno">Bueno</option>
+                            <option value="regular">Regular</option>
+                            <option value="pobre">Pobre</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="file-input">Seleccionar Archivo (máx. 5MB):</label>
+                        <input type="file" id="file-input" required>
+                        <div class="file-info" id="file-info"></div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Subir Archivo</button>
+                    
+                    <div id="upload-status"></div>
+                </form>
+            </div>
+            
+            <div class="uploaded-files">
+                <h3>Archivos Subidos</h3>
+                <table id="files-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>Tamaño</th>
+                            <th>Fecha</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Se llenará dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2025 Escuela Profesional de Ingeniería Informática y de Sistemas - UNSAAC</p>
+    </footer>
+
+    <script src="js/database.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/archivos.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            updateNavMenu(currentUser);
+            updateUserInfo(currentUser);
+            
+            // Cargar cursos del docente
+            await loadTeacherCourses(currentUser.id);
+            
+            // Manejar cambio de selección de curso
+            document.getElementById('course-select').addEventListener('change', async function() {
+                const courseId = this.value;
+                if (courseId) {
+                    await loadPortfoliosForCourse(courseId);
+                    document.getElementById('portfolio-select').disabled = false;
+                } else {
+                    document.getElementById('portfolio-select').disabled = true;
+                    document.getElementById('portfolio-select').innerHTML = '<option value="">-- Seleccione un portafolio --</option>';
+                }
+            });
+            
+            // Mostrar información del archivo seleccionado
+            document.getElementById('file-input').addEventListener('change', function() {
+                const file = this.files[0];
+                if (file) {
+                    const fileInfo = document.getElementById('file-info');
+                    fileInfo.innerHTML = `
+                        <p><strong>Nombre:</strong> ${file.name}</p>
+                        <p><strong>Tamaño:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p><strong>Tipo:</strong> ${file.type}</p>
+                    `;
+                    
+                    // Validar tamaño máximo
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert('El archivo excede el límite de 5MB');
+                        this.value = '';
+                        fileInfo.innerHTML = '';
+                    }
+                }
+            });
+            
+            // Manejar envío del formulario
+            document.getElementById('upload-form').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const courseId = document.getElementById('course-select').value;
+                const portfolioId = document.getElementById('portfolio-select').value;
+                const category = document.getElementById('file-category').value;
+                const subcategory = document.getElementById('file-subcategory').value;
+                const qualityLevel = document.getElementById('quality-level').value;
+                const fileInput = document.getElementById('file-input');
+                
+                if (!fileInput.files[0]) {
+                    alert('Por favor seleccione un archivo');
+                    return;
+                }
+                
+                try {
+                    const uploadStatus = document.getElementById('upload-status');
+                    uploadStatus.innerHTML = '<p class="loading">Subiendo archivo...</p>';
+                    
+                    await uploadFile(
+                        portfolioId, 
+                        category, 
+                        subcategory, 
+                        fileInput.files[0], 
+                        qualityLevel, 
+                        currentUser.id
+                    );
+                    
+                    uploadStatus.innerHTML = '<p class="success">Archivo subido correctamente!</p>';
+                    fileInput.value = '';
+                    document.getElementById('file-info').innerHTML = '';
+                    
+                    // Actualizar lista de archivos
+                    await loadUploadedFiles(portfolioId);
+                } catch (error) {
+                    document.getElementById('upload-status').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+                }
+            });
+            
+            // Si hay un portafolio seleccionado en la URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const portfolioId = urlParams.get('portfolio');
+            if (portfolioId) {
+                await loadPortfolioDetails(portfolioId);
+                await loadUploadedFiles(portfolioId);
+            }
+        });
+    </script>
+</body>
+</html>
